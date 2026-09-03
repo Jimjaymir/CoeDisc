@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Classroom Walk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+html, body {
+  margin: 0; padding: 0; background: #1b1b1b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  width: 100%; height: 100%;
+  color: #eee;
+}
+#wrap { padding: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
+h2 { display: none; margin: 4px 0 10px; font-size: 17px; text-align: center; color: #f2f2f2; }
+#stage {
+  position: relative; width: 100vw; height: 100vh;
+  border-radius: 0; overflow: hidden; box-shadow: none;
+  border: none; touch-action: none; background: #000;
+}
+canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+#controls {
+  display: none; justify-content: space-between; align-items: center;
+  margin-top: 10px; font-size: 13px; color: #aaa; gap: 8px; flex-wrap: wrap;
+}
+/* ===== Pixel button base =====
+   Chunky bevel: light edge top-left, dark edge bottom-right (classic NES/GB button),
+   hard corners, blocky font, and a "press down" shift on :active instead of just a color change. */
+button {
+  background: #2c6e49; color: #f4fff0; border: none; border-radius: 0;
+  padding: 10px 14px; font-size: 10px; cursor: pointer;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  box-shadow:
+    inset 3px 3px 0 rgba(255,255,255,0.28),
+    inset -3px -3px 0 rgba(0,0,0,0.38),
+    3px 3px 0 rgba(0,0,0,0.55);
+  letter-spacing: 0.5px;
+  image-rendering: pixelated;
+  transform: translate(0, 0);
+  line-height: 1.6;
+}
+button:active {
+  box-shadow:
+    inset -3px -3px 0 rgba(255,255,255,0.18),
+    inset 3px 3px 0 rgba(0,0,0,0.45);
+  transform: translate(2px, 2px);
+}
+button:active { background: #1f5236; }
+#dpad {
+  display: grid; grid-template-columns: 46px 46px 46px; grid-template-rows: 46px 46px 46px;
+  gap: 4px; margin-top: 10px; justify-content: center;
+}
+#dpad button { width: 46px; height: 46px; font-size: 18px; padding: 0; }
+.spacer { visibility: hidden; }
+#charSelectControls {
+  display: none; justify-content: center; gap: 10px; margin-top: 10px;
+}
+#charSelectControls button {
+  padding: 12px 16px; font-size: 12px;
+  background: #2f5d8f; color: #fff; cursor: pointer;
+}
+#charSelectControls button:active { background: #1f4066; }
+#csConfirmBtn { background: #3f9142; }
+#csConfirmBtn:active { background: #2c6b2e; }
+#hint { font-size: 12px; color: #888; text-align: center; margin-top: 6px; }
+#boardPrompt, #actionPrompt {
+  position: absolute; left: 50%; top: 14%; transform: translate(-50%, 0);
+  background: rgba(20,20,20,0.82); color: #fff; padding: 6px 12px;
+  border-radius: 20px; font-size: 12.5px; display: none; pointer-events: none;
+  white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.4); z-index: 5;
+}
+#questSidebar {
+  position: absolute; left: 0; top: 50%; transform: translate(-102%, -50%);
+  background: linear-gradient(135deg, rgba(15,25,20,0.95), rgba(8,15,12,0.95));
+  border: 2px solid #2f8a50; border-left: none; border-radius: 0 12px 12px 0;
+  box-shadow: 0 0 25px rgba(40,220,120,0.25), 4px 0 20px rgba(0,0,0,0.5);
+  padding: 16px 20px 16px 16px; min-width: 220px; max-width: 260px;
+  font-family: 'Courier New', monospace; color: #cdeed9; z-index: 15;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#questSidebar.show { transform: translate(0, -50%); }
+#questSidebar .questHeader {
+  font-size: 12px; letter-spacing: 2px; color: #6dffa0; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+#questSidebar .questHeader::before { content: '◆'; color: #4dff88; }
+#questSidebar ul { list-style: none; margin: 0; padding: 0; }
+#questSidebar li {
+  font-size: 12.5px; padding: 5px 0 5px 22px; position: relative; line-height: 1.35;
+  color: #7a988a;
+}
+#questSidebar li.qs-done { color: #6dffa0; text-decoration: line-through; text-decoration-color: rgba(109,255,160,0.4); }
+#questSidebar li.qs-done::before { content: '✔'; position: absolute; left: 0; color: #4dff88; }
+#questSidebar li.qs-current { color: #eaffee; font-weight: bold; }
+#questSidebar li.qs-current::before { content: '▶'; position: absolute; left: 0; color: #ffe14d; animation: questPulse 1.2s ease-in-out infinite; }
+#questSidebar li.qs-pending::before { content: '○'; position: absolute; left: 0; color: #3f5c4c; }
+@keyframes questPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+#speechBubble {
+  position: absolute; left: 50%; bottom: 3%; transform: translate(-50%, 0);
+  background: #fdfdf6; color: #222; padding: 22px 28px; border-radius: 16px;
+  font-size: 22px; line-height: 1.4; display: none; pointer-events: none;
+  width: 40%; min-height: 25vh; max-height: 25vh; box-sizing: border-box;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55); z-index: 6; text-align: center;
+  flex-direction: column; align-items: center; justify-content: center;
+  overflow-y: auto;
+}
+#speechBubble.story { pointer-events: auto; cursor: pointer; display: flex; }
+#speechBubble.story.typed::after {
+  content: '▼ tap or press E'; display: block; margin-top: 14px;
+  font-size: 13px; color: #888;
+}
+#speechBubble.story.wide { width: 60%; }
+#speechBubble.story.medium { width: 50%; }
+#speechBubble.pop { animation: bubblePop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes bubblePop {
+  0%   { transform: translate(-50%, 0) scale(0.85); opacity: 0.4; }
+  60%  { transform: translate(-50%, 0) scale(1.04); opacity: 1; }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+#writeBtn, #talkBtn {
+  position: absolute; right: 10px; bottom: 10px; display: none;
+  background: #b5482a; padding: 10px 14px; font-size: 11px; z-index: 5;
+}
+#writeBtn:active, #talkBtn:active { background: #8f381f; }
+#talkBtn { background: #7b2fbf; }
+#talkBtn:active { background: #5d2291; }
+#boardModal {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.55);
+  display: none; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+}
+#boardModal.open { display: flex; }
+#boardModalCard {
+  background: #fdfdf6; color: #222; border-radius: 0; padding: 16px;
+  width: 100%; max-width: 340px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+  border: 3px solid #222;
+}
+#boardModalCard h3 { margin: 0 0 8px; font-size: 15px; color: #333; }
+#boardModalCard input {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 14px;
+  border: 2px solid #222; border-radius: 0; margin-bottom: 10px;
+}
+#boardModalCard .row { display: flex; gap: 8px; justify-content: flex-end; }
+#boardModalCard button.cancel { background: #999; }
+#boardModalCard button.cancel:active { background: #777; }
+#laptopBtn {
+  position: absolute; right: 10px; bottom: 10px; display: none;
+  background: #1f7a8c; padding: 10px 14px; font-size: 11px; z-index: 5;
+}
+#laptopBtn:active { background: #145a66; }
+
+/* ===== Laptop Lock System: quiz + password ===== */
+#laptopLockModal {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.8);
+  display: none; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+  z-index: 30;
+}
+#laptopLockModal.open { display: flex; }
+#laptopScreen {
+  width: 85%; height: 85%; max-width: 700px; max-height: 560px;
+  background: linear-gradient(180deg, #0a1a12, #071108);
+  border: 3px solid #1f7a3a; border-radius: 10px;
+  box-shadow: 0 0 40px rgba(40,220,120,0.35), inset 0 0 60px rgba(0,0,0,0.6);
+  font-family: 'Courier New', monospace; color: #4dff88;
+  display: flex; flex-direction: column; padding: 22px 26px; box-sizing: border-box;
+  position: relative; overflow: hidden;
+}
+#laptopScreen::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,255,120,0.03) 3px);
+  animation: scanlines 6s linear infinite;
+}
+#confettiCanvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 40;
+}
+@keyframes scanlines { from { background-position: 0 0; } to { background-position: 0 40px; } }
+#laptopScreen h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: 1px; color: #6dffa0; }
+#laptopScreen .sub { font-size: 11px; color: #3ecb75; margin-bottom: 14px; opacity: 0.8; }
+#laptopScreen.shake { animation: laptopShake 0.4s; }
+@keyframes laptopShake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); border-color: #ff3b3b; }
+  40% { transform: translateX(10px); }
+  60% { transform: translateX(-6px); border-color: #ff3b3b; }
+  80% { transform: translateX(6px); }
+}
+#laptopScreen .flash-ok { animation: flashOk 0.35s; }
+#laptopScreen .flash-bad { animation: flashBad 0.35s; }
+@keyframes flashOk { 0% { background: rgba(60,255,140,0.25); } 100% { background: transparent; } }
+@keyframes flashBad { 0% { background: rgba(255,60,60,0.28); } 100% { background: transparent; } }
+
+#quizProgress { display: flex; gap: 6px; margin-bottom: 16px; }
+#quizProgress .dot {
+  width: 12px; height: 12px; border-radius: 50%; background: #143d22;
+  border: 1px solid #2f8a50;
+}
+#quizProgress .dot.correct { background: #4dff88; box-shadow: 0 0 8px #4dff88; }
+#quizProgress .dot.wrong { background: #ff4d4d; border-color: #ff4d4d; box-shadow: 0 0 8px #ff4d4d; }
+#quizProgress .dot.current { border-color: #fff; }
+
+#quizQuestion { font-size: 18px; color: #eaffee; margin-bottom: 18px; line-height: 1.4; min-height: 60px; }
+#quizChoices { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.quizChoiceBtn {
+  background: #0d2417; border: 2px solid #2f8a50; color: #b9ffcf;
+  text-align: left; padding: 12px 14px; border-radius: 0; font-size: 14px;
+  font-family: 'Courier New', monospace; cursor: pointer;
+}
+.quizChoiceBtn:hover, .quizChoiceBtn:active { background: #163a24; border-color: #4dff88; }
+.quizChoiceBtn.correct { background: #1f5c34; border-color: #4dff88; color: #fff; }
+.quizChoiceBtn.wrong { background: #5c1f1f; border-color: #ff4d4d; color: #fff; }
+.quizChoiceBtn:disabled { pointer-events: none; }
+
+#laptopResults { text-align: center; }
+#laptopResults .score { font-size: 34px; color: #6dffa0; margin: 10px 0; }
+#laptopResults .verdict { font-size: 15px; margin-bottom: 14px; }
+#laptopResults .recap { text-align: left; font-size: 12.5px; color: #9fe8b8; margin: 12px 0; max-height: 130px; overflow-y: auto; }
+#laptopResults .recap div { margin-bottom: 4px; }
+#laptopResults .recap .r-correct::before { content: '✔ '; color: #4dff88; }
+#laptopResults .recap .r-wrong::before { content: '✘ '; color: #ff4d4d; }
+
+#passwordReveal {
+  text-align: center; font-size: 15px;
+}
+#passwordReveal .code {
+  font-size: 26px; letter-spacing: 3px; color: #fff; background: #0d2417;
+  border: 2px dashed #4dff88; padding: 12px 18px; border-radius: 0; margin: 16px 0; display: inline-block;
+}
+
+#passwordEntry { text-align: center; }
+#passwordEntry input {
+  width: 100%; box-sizing: border-box; background: #0d2417; border: 2px solid #2f8a50;
+  color: #eaffee; font-family: 'Courier New', monospace; font-size: 20px; letter-spacing: 3px;
+  padding: 12px; border-radius: 0; text-align: center; margin: 14px 0;
+}
+#passwordEntry input:focus { outline: none; border-color: #4dff88; }
+#lockCooldownMsg { font-size: 13px; color: #ff8a8a; margin-top: 10px; }
+
+.laptopBtnRow { display: flex; gap: 10px; justify-content: center; margin-top: auto; padding-top: 14px; }
+.laptopActionBtn {
+  background: #1f7a3a; color: #eaffee; border: none; padding: 10px 20px;
+  border-radius: 0; font-family: 'Courier New', monospace; font-size: 13px; cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 rgba(255,255,255,0.22),
+    inset -2px -2px 0 rgba(0,0,0,0.4),
+    2px 2px 0 rgba(0,0,0,0.5);
+}
+.laptopActionBtn:active {
+  background: #155c2b;
+  box-shadow: inset 2px 2px 0 rgba(0,0,0,0.4);
+  transform: translate(2px, 2px);
+}
+.laptopActionBtn.cancel { background: #444; }
+.laptopActionBtn.cancel:active { background: #2c2c2c; }
+
+/* ===== Download / Upload / Ending ===== */
+#downloadPromptBtn {
+  position: absolute; right: 10px; bottom: 10px; display: none;
+  background: #1f7a8c; padding: 10px 14px; font-size: 11px; z-index: 5;
+}
+#downloadPromptBtn:active { background: #145a66; }
+#downloadModal, #uploadModal {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.8);
+  display: none; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+  z-index: 30;
+}
+#downloadModal.open, #uploadModal.open { display: flex; }
+#downloadScreen, #uploadScreen {
+  width: 85%; height: 60%; max-width: 640px; max-height: 420px;
+  background: linear-gradient(180deg, #0a1a12, #071108);
+  border: 3px solid #1f7a3a; border-radius: 10px;
+  box-shadow: 0 0 40px rgba(40,220,120,0.35), inset 0 0 60px rgba(0,0,0,0.6);
+  font-family: 'Courier New', monospace; color: #4dff88;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 22px 26px; box-sizing: border-box; position: relative; overflow: hidden; text-align: center;
+}
+#downloadScreen::before, #uploadScreen::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,255,120,0.03) 3px);
+  animation: scanlines 6s linear infinite;
+}
+#downloadScreen h3, #uploadScreen h3 { margin: 0 0 6px; font-size: 15px; letter-spacing: 1px; color: #6dffa0; }
+#downloadScreen .sub, #uploadScreen .sub { font-size: 11px; color: #3ecb75; margin-bottom: 16px; opacity: 0.85; }
+.dlBarOuter {
+  width: 100%; height: 18px; background: #0d2417; border: 1px solid #2f8a50;
+  border-radius: 10px; overflow: hidden; margin-bottom: 8px;
+}
+.dlBarInner {
+  height: 100%; width: 0%; background: linear-gradient(90deg, #1f7a3a, #4dff88);
+  box-shadow: 0 0 10px rgba(77,255,136,0.6); transition: width 0.15s linear;
+}
+.dlPercent { font-size: 20px; color: #eaffee; letter-spacing: 2px; }
+
+#deskBtn {
+  position: absolute; right: 10px; bottom: 10px; display: none;
+  background: #1f7a8c; padding: 10px 14px; font-size: 11px; z-index: 5;
+}
+#deskBtn:active { background: #145a66; }
+
+#uploadFinalMessage {
+  font-size: 18px; color: #eaffee; margin: 14px 0; min-height: 26px; letter-spacing: 0.5px;
+}
+#uploadFinalImage {
+  display: none; max-width: 65%; max-height: 130px; border-radius: 8px;
+  border: 2px solid #2f8a50; box-shadow: 0 4px 16px rgba(0,0,0,0.5); margin-top: 4px;
+}
+#uploadDataInfo {
+  display: none; text-align: left; font-size: 13px; color: #b9ffcf; line-height: 1.9;
+  background: #0d2417; border: 1px solid #2f8a50; border-radius: 6px; padding: 14px 18px;
+  margin: 8px 0; width: 100%; box-sizing: border-box; white-space: pre-line;
+}
+#uploadDataInfo .di-label { color: #6dffa0; }
+
+#msgNotification {
+  position: absolute; top: 16px; right: 16px; display: none;
+  background: #1c1c1e; border: 1px solid #3a3a3c; border-radius: 12px;
+  padding: 12px 16px; align-items: center; gap: 10px; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5); z-index: 45; max-width: 240px;
+  animation: notifSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#msgNotification.show { display: flex; }
+#msgNotification:active { background: #2a2a2c; }
+@keyframes notifSlideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.notifIcon { font-size: 22px; }
+.notifTitle { font-size: 13px; color: #fff; font-weight: bold; }
+.notifSub { font-size: 11px; color: #9a9a9e; margin-top: 2px; }
+
+
+#endingFade {
+  position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+  transition: opacity 2.5s ease;
+}
+#endingFade.active { opacity: 1; pointer-events: auto; }
+#endingFadeText {
+  color: #eee; font-family: 'Courier New', monospace; font-size: 22px; letter-spacing: 2px;
+  opacity: 0; transition: opacity 1.5s ease 1.2s;
+}
+#endingFade.active #endingFadeText { opacity: 1; }
+
+/* ===== "I LOVE YOU" virus corruption sequence ===== */
+#stage.corrupting {
+  animation: corruptShake 0.15s infinite;
+}
+@keyframes corruptShake {
+  0%   { transform: translate(0, 0); filter: hue-rotate(0deg); }
+  20%  { transform: translate(-2px, 1px); filter: hue-rotate(15deg); }
+  40%  { transform: translate(2px, -1px) skewX(0.3deg); filter: hue-rotate(-10deg); }
+  60%  { transform: translate(-1px, -2px); filter: hue-rotate(20deg) invert(0.03); }
+  80%  { transform: translate(1px, 2px) skewX(-0.3deg); filter: hue-rotate(-15deg); }
+  100% { transform: translate(0, 0); filter: hue-rotate(0deg); }
+}
+#virusOverlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 60;
+  display: none; overflow: hidden;
+}
+#virusOverlay.active { display: block; }
+#virusOverlay .glitchLine {
+  position: absolute; left: 0; width: 100%; height: 3px;
+  background: rgba(255, 30, 30, 0.55); mix-blend-mode: screen;
+}
+#virusText {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; text-align: center; font-family: 'Courier New', monospace;
+  color: #ff2b2b; text-shadow: 0 0 10px rgba(255,30,30,0.9), 2px 0 #4dffea, -2px 0 #ff2bd6;
+  font-size: 26px; letter-spacing: 3px; opacity: 0; transition: opacity 0.4s ease;
+}
+#virusText.show { opacity: 1; }
+#virusText .virusSub { font-size: 13px; color: #ff8a8a; margin-top: 10px; letter-spacing: 1px; text-shadow: none; }
+
+
+
+#videoModal {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.7);
+  display: none; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+  z-index: 20;
+}
+#videoModal.open { display: flex; }
+#videoModalCard {
+  background: #111; border-radius: 10px; padding: 12px;
+  width: 85%; height: 85%; max-width: 85vw; max-height: 85vh; box-sizing: border-box;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  display: flex; flex-direction: column;
+}
+#videoModalCard h3 { margin: 0 0 8px; font-size: 14px; color: #eee; text-align: center; flex-shrink: 0; }
+#videoFrameWrap {
+  position: relative; flex: 1 1 auto; min-height: 0;
+  width: auto; aspect-ratio: 3 / 4; margin: 0 auto;
+  background: #000; border-radius: 6px; overflow: hidden;
+  max-width: 100%;
+}
+#videoFrameWrap > div, #videoFrame, #videoFrame iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+#videoFrame { position: relative; }
+#videoModalCard .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+#videoModalCard button.cancel { background: #999; }
+#videoModalCard button.cancel:active { background: #777; }
+#dialogueOverlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.75);
+  display: none; align-items: center; justify-content: center;
+  border-radius: 6px; z-index: 25; padding: 10px; box-sizing: border-box;
+}
+#dialogueOverlay.open { display: flex; }
+#dialogueOverlay img {
+  max-width: 100%; max-height: 100%; border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+}
+#dialogueSkipBtn {
+  position: absolute; right: 8px; bottom: 8px; z-index: 26; display: none;
+  background: #555; padding: 6px 10px; font-size: 11px; border-radius: 14px;
+}
+#dialogueSkipBtn:active { background: #3a3a3a; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h2 id="sceneTitle">Room 01AB — walk around</h2>
+  <div id="stage">
+    <canvas id="bg" width="1200" height="675"></canvas>
+    <canvas id="fg" width="1200" height="675"></canvas>
+    <div id="boardPrompt">press E to write on the board</div>
+    <div id="actionPrompt">press E to talk</div>
+    <div id="questSidebar">
+      <div class="questHeader">QUEST LOG</div>
+      <ul id="questList"></ul>
+    </div>
+    <div id="speechBubble"></div>
+    <button id="writeBtn">✏️ write on the board</button>
+    <button id="talkBtn">💬 talk</button>
+    <button id="laptopBtn">💻 open the laptop</button>
+    <div id="boardModal">
+      <div id="boardModalCard">
+        <h3>Write on the whiteboard</h3>
+        <input id="boardInput" type="text" maxlength="28" placeholder="Type something short...">
+        <div class="row">
+          <button class="cancel" id="boardCancel">nvm</button>
+          <button id="boardSubmit">write it</button>
+        </div>
+      </div>
+    </div>
+    <div id="laptopLockModal">
+      <div id="laptopScreen">
+        <canvas id="confettiCanvas"></canvas>
+        <div id="lockStageQuiz">
+          <h3>MASTER COMPUTER — ACCESS LOCKED</h3>
+          <div class="sub">get 3/5 right and you're in</div>
+          <div id="quizProgress"></div>
+          <div id="quizQuestion"></div>
+          <div id="quizChoices"></div>
+        </div>
+        <div id="lockStageResults" style="display:none;">
+          <div id="laptopResults">
+            <h3>how'd you do</h3>
+            <div class="score" id="resultScoreText"></div>
+            <div class="verdict" id="resultVerdictText"></div>
+            <div class="recap" id="resultRecap"></div>
+            <div class="laptopBtnRow">
+              <button class="laptopActionBtn cancel" id="resultCloseBtn">close</button>
+              <button class="laptopActionBtn" id="resultContinueBtn" style="display:none;">next ▶</button>
+            </div>
+          </div>
+        </div>
+        <div id="lockStagePasswordReveal" style="display:none;">
+          <div id="passwordReveal">
+            <h3>here's your code</h3>
+            <div>remember it, you'll type it in next</div>
+            <div class="code" id="revealedPasswordText"></div>
+            <div class="laptopBtnRow">
+              <button class="laptopActionBtn" id="passwordRevealContinueBtn">ok, let's go ▶</button>
+            </div>
+          </div>
+        </div>
+        <div id="lockStagePasswordEntry" style="display:none;">
+          <div id="passwordEntry">
+            <h3>type the code</h3>
+            <div class="sub">watch your caps</div>
+            <input id="passwordInput" type="text" autocomplete="off" spellcheck="false" placeholder="••••••••">
+            <div id="lockCooldownMsg" style="display:none;"></div>
+            <div class="laptopBtnRow">
+              <button class="laptopActionBtn cancel" id="passwordCancelBtn">nvm</button>
+              <button class="laptopActionBtn" id="passwordSubmitBtn">unlock ▶</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="videoModal">
+      <div id="videoModalCard">
+        <h3>Engr. Renz Alib</h3>
+        <div id="videoFrameWrap">
+          <div id="videoFrame"></div>
+          <div id="dialogueOverlay"><img id="dialogueImg" src="" alt="dialogue"></div>
+          <button id="dialogueSkipBtn">skip ▶</button>
+        </div>
+        <div class="row">
+          <button class="cancel" id="videoCloseBtn">close</button>
+        </div>
+      </div>
+    </div>
+    <button id="downloadPromptBtn">💻 download the file</button>
+    <div id="downloadModal">
+      <div id="downloadScreen">
+        <h3>&gt; DOWNLOADING INTERVIEW DATA_</h3>
+        <div class="sub">don't close this window</div>
+        <div class="dlBarOuter"><div class="dlBarInner" id="downloadBarFill"></div></div>
+        <div class="dlPercent" id="downloadPercentText">0%</div>
+      </div>
+    </div>
+    <button id="deskBtn">🖥️ use the computer</button>
+    <div id="uploadModal">
+      <div id="uploadScreen">
+        <h3 id="uploadTitle">&gt; hey, 01AB!</h3>
+        <div id="uploadStageIdle">
+          <div class="sub">upload the interview data you collected</div>
+          <div class="laptopBtnRow">
+            <button class="laptopActionBtn cancel" id="uploadCancelBtn">close</button>
+            <button class="laptopActionBtn" id="uploadStartBtn">upload a file ▶</button>
+          </div>
+        </div>
+        <div id="uploadStageProgress" style="display:none;">
+          <div class="sub">uploading interview_data.dat ...</div>
+          <div class="dlBarOuter"><div class="dlBarInner" id="uploadBarFill"></div></div>
+          <div class="dlPercent" id="uploadPercentText">0%</div>
+        </div>
+        <div id="uploadStageDone" style="display:none;">
+          <div class="sub" id="uploadSuccessText">&gt; done!</div>
+          <div id="uploadDataInfo"></div>
+          <div id="uploadFinalMessage"></div>
+          <img id="uploadFinalImage" src="assets/images/characters/IMG_20260903_194716.jpg" alt="">
+        </div>
+      </div>
+    </div>
+    <div id="msgNotification">
+      <div class="notifIcon">💬</div>
+      <div class="notifText">
+        <div class="notifTitle">new message</div>
+        <div class="notifSub">tap to open</div>
+      </div>
+    </div>
+    <div id="virusOverlay">
+      <div id="virusText">
+        <div id="virusMainText"></div>
+        <div class="virusSub" id="virusSubText"></div>
+      </div>
+    </div>
+    <div id="endingFade"><div id="endingFadeText">to be continued...</div></div>
+  </div>
+  <div id="hint">arrow keys / WASD to move — talk to the guide by the portal, then walk in to head to Cyber Land</div>
+  <div id="controls">
+    <span id="posLabel">x: 0, y: 0</span>
+    <button id="toggleHit">Show hitboxes</button>
+  </div>
+  <div id="dpad">
+    <span class="spacer"></span><button id="btnUp">▲</button><span class="spacer"></span>
+    <button id="btnLeft">◀</button><span class="spacer"></span><button id="btnRight">▶</button>
+    <span class="spacer"></span><button id="btnDown">▼</button><span class="spacer"></span>
+  </div>
+  <div id="charSelectControls">
+    <button id="csPrevBtn">◀ back</button>
+    <button id="csConfirmBtn">pick this one ✓</button>
+    <button id="csNextBtn">next ▶</button>
+  </div>
+</div>
+
+<script>
+const bgCanvas = document.getElementById('bg');
+const fgCanvas = document.getElementById('fg');
+const bgCtx = bgCanvas.getContext('2d');
+const fgCtx = fgCanvas.getContext('2d');
+bgCtx.imageSmoothingEnabled = false;
+fgCtx.imageSmoothingEnabled = false;
+const W = 1200, H = 675;
+
+// ---- Background images (one per scene) ----
+const roomImg = new Image();
+roomImg.src = "assets/images/backgrounds/o1aroom.png";
+const cyberImg = new Image();
+cyberImg.src = "assets/images/backgrounds/cyberland.png.png";
+
+// ---- Character sprites (4 real uploaded directions) ----
+const charImgs = {
+  down: new Image(),  // front view
+  up: new Image(),    // back view
+  left:  new Image(),  // profile facing left
+  right: new Image()   // profile facing right
+};
+charImgs.down.src  = "assets/images/players/front_sprite.png";
+charImgs.up.src    = "assets/images/players/back_sprite.png";
+charImgs.left.src  = "assets/images/players/side_sprite.png";
+charImgs.right.src = "assets/images/players/side_sprite_transparent_exact.png";
+
+// For each direction, the actual visible-character bounding box within its source image
+// (in source-image pixel coordinates), so sprites with different amounts of empty canvas
+// margin still render at a consistent on-screen size. Computed once per image on load.
+const charContentBox = { down: null, up: null, left: null, right: null };
+
+function computeContentBox(img) {
+  const cw = img.naturalWidth, ch = img.naturalHeight;
+  if (!cw || !ch) return { x: 0, y: 0, w: cw, h: ch };
+  const off = document.createElement('canvas');
+  off.width = cw; off.height = ch;
+  const octx = off.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  let data;
+  try {
+    data = octx.getImageData(0, 0, cw, ch).data;
+  } catch (e) {
+    // Canvas got tainted (e.g. file:// CORS) — fall back to full image, no crash.
+    return { x: 0, y: 0, w: cw, h: ch };
+  }
+  let minX = cw, minY = ch, maxX = -1, maxY = -1;
+  for (let y = 0; y < ch; y++) {
+    for (let x = 0; x < cw; x++) {
+      const i = (y * cw + x) * 4;
+      const a = data[i+3];
+      if (a < 10) continue; // transparent
+      const r = data[i], g = data[i+1], b = data[i+2];
+      if (r > 245 && g > 245 && b > 245) continue; // near-white background
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return { x: 0, y: 0, w: cw, h: ch }; // nothing found, fall back to full image
+  return { x: minX, y: minY, w: (maxX - minX + 1), h: (maxY - minY + 1) };
+}
+
+function refreshContentBox(key) {
+  charContentBox[key] = computeContentBox(charImgs[key]);
+}
+
+let charsLoaded = 0, roomLoaded = false, cyberLoaded = false;
+const NUM_CHAR_IMAGES = 4;
+
+const startupImg = new Image();
+startupImg.src = "assets/images/startup/start.png";
+let startupLoaded = false;
+startupImg.onload = () => { startupLoaded = true; tryStart(); };
+
+const NUM_CHARSELECT_IMAGES = 5;
+let charSelectLoaded = 0;
+const charSelectImgs = [];
+for (let i = 0; i < NUM_CHARSELECT_IMAGES; i++) {
+  const cImg = new Image();
+  cImg.src = `assets/images/charselect/char${i}.png`;
+  cImg.onload = () => { charSelectLoaded++; tryStart(); };
+  charSelectImgs.push(cImg);
+}
+
+let gameState = 'menu';  // 'menu' | 'fade' | 'charselect' | 'game'
+let gameStartTime = 0;   // for star flicker timing
+let selectedCharIndex = 0;   // 0 = placeholder/default, 1-4 = real characters
+let confirmedCharIndex = null;
+let fadeStartTime = 0;
+const FADE_DURATION = 500; // ms, half out / half in
+let fadeNextState = 'charselect';
+
+// ================= CLASSROOM SCENE =================
+const chairColsX = [187, 290, 393, 496, 599, 702, 805, 908, 1011];
+const chairRowsY = [363, 441, 519, 598];
+const CHAIR_W = 60, CHAIR_H = 16;
+
+let classroomHitboxes = [];
+for (const ry of chairRowsY) {
+  for (const cx of chairColsX) {
+    classroomHitboxes.push({ x: cx - CHAIR_W/2, y: ry - CHAIR_H/2, w: CHAIR_W, h: CHAIR_H, type: 'chair' });
+  }
+}
+classroomHitboxes.push({ x: 171, y: 292, w: 153, h: 74, type: 'desk' });
+classroomHitboxes.push({ x: 812, y: 300, w: 10, h: 14, type: 'obj' });
+classroomHitboxes.push({ x: 0, y: 0, w: W, h: 182, type: 'wall' });
+classroomHitboxes.push({ x: 375, y: 182, w: 485, h: 100, type: 'board' });
+classroomHitboxes.push({ x: 0, y: 0, w: 60, h: H, type: 'wall' });
+classroomHitboxes.push({ x: W-60, y: 0, w: 60, h: H, type: 'wall' });
+classroomHitboxes.push({ x: 0, y: H-20, w: W, h: 20, type: 'wall' });
+classroomHitboxes.push({ x: 1050, y: 105, w: 95, h: 215, type: 'door' });
+
+const npc = { x: 535, y: 583, w: 30, h: 44, type: 'npc' };
+const npcTalkZone = { x: 497, y: 539, w: 106, h: 132 };
+const portal = { x: 517, y: 559, w: 66, h: 92 };
+
+const boardZone = { x: 380, y: 284, w: 460, h: 50 };
+const BOARD_TEXT_X = 410, BOARD_TEXT_Y = 118, BOARD_LINE_H = 27, MAX_BOARD_LINES = 5;
+const boardColors = ['#c0392b', '#1a3fa0', '#1b5e20', '#222222'];
+let boardMessages = [];
+let nearBoard = false;
+let nearNpc = false;
+
+// Desk/computer — the upload station near the end of the game
+const deskZone = { x: 150, y: 366, w: 195, h: 60 };
+let nearDesk = false;
+
+// ================= CYBER LAND SCENE =================
+const backPortal = { x: 577, y: 604, w: 48, h: 36 };
+
+// Master computer (hologram laptop) — sits just above the back portal, on its pedestal
+const laptop = { x: 560, y: 470, w: 80, h: 60 };
+const laptopHitbox = { x: 555, y: 495, w: 90, h: 40, type: 'laptop' };
+const laptopZone = { x: 520, y: 500, w: 160, h: 110 };
+const GDRIVE_FILE_ID = '1bo8e6Xy5iUQWrgjyvjN7u-6uq6boJUKi';
+const INTERVIEW_DURATION_MS = 14 * 60 * 1000 + 2 * 1000; // ~14:02, matches the real video length
+let nearLaptop = false;
+
+// ================= LAPTOP LOCK: QUIZ + PASSWORD =================
+const QUIZ_QUESTION_POOL = [
+  { q: 'What does "CPU" stand for?', choices: ['Central Processing Unit', 'Computer Personal Unit', 'Central Program Utility', 'Core Processing Unifier'], correct: 0 },
+  { q: 'Which of these is a programming language?', choices: ['HTML', 'Python', 'HTTP', 'USB'], correct: 1 },
+  { q: 'What does "RAM" stand for?', choices: ['Random Access Memory', 'Read Access Module', 'Rapid Application Memory', 'Run Application Manager'], correct: 0 },
+  { q: 'Which company created the Windows operating system?', choices: ['Apple', 'Google', 'Microsoft', 'IBM'], correct: 2 },
+  { q: 'What does "URL" stand for?', choices: ['Uniform Resource Locator', 'Universal Reference Link', 'User Retrieval Log', 'Unified Router Line'], correct: 0 },
+  { q: 'Which of these stores data permanently, even when powered off?', choices: ['RAM', 'Cache', 'Hard Drive / SSD', 'Register'], correct: 2 },
+  { q: 'What does "HTTP" stand for?', choices: ['HyperText Transfer Protocol', 'High Transfer Text Program', 'Home Tool Transfer Process', 'HyperLink Text Processor'], correct: 0 },
+  { q: 'Which of these is an input device?', choices: ['Monitor', 'Printer', 'Keyboard', 'Speaker'], correct: 2 },
+  { q: 'What does "GPU" primarily handle?', choices: ['Network traffic', 'Graphics rendering', 'File storage', 'Sound playback'], correct: 1 },
+  { q: 'Which symbol is commonly used to start a comment in Python?', choices: ['//', '#', '<!--', '/*'], correct: 1 },
+  { q: 'What does "OS" stand for?', choices: ['Operating System', 'Output Sequence', 'Online Server', 'Optical Storage'], correct: 0 },
+  { q: 'Which of these is NOT a web browser?', choices: ['Chrome', 'Firefox', 'Python', 'Safari'], correct: 2 },
+  { q: 'What does "AI" stand for?', choices: ['Automated Interface', 'Artificial Intelligence', 'Advanced Integration', 'Applied Informatics'], correct: 1 },
+  { q: 'Which of these is a binary number?', choices: ['1024', '10A1', '1011', '10.5'], correct: 2 },
+  { q: 'What does "Wi-Fi" primarily provide?', choices: ['Wireless internet access', 'Wired power supply', 'Video compression', 'File encryption'], correct: 0 },
+  { q: 'Which of these is a type of database language?', choices: ['SQL', 'HTML', 'CSS', 'FTP'], correct: 0 },
+  { q: 'What is the main function of a firewall?', choices: ['Speed up internet', 'Block unauthorized network access', 'Cool down the CPU', 'Store files'], correct: 1 },
+  { q: 'Which of these is measured in Hertz (Hz)?', choices: ['Storage size', 'CPU clock speed', 'File count', 'Screen resolution'], correct: 1 },
+  { q: 'What does "IDE" stand for in programming?', choices: ['Integrated Development Environment', 'Internal Data Exchange', 'Interface Design Engine', 'Isolated Debug Executor'], correct: 0 },
+  { q: 'Which of these is a version control system?', choices: ['Git', 'Excel', 'Photoshop', 'Zoom'], correct: 0 }
+];
+const QUIZ_LANGUAGES = ['C++', 'SQL', 'Python', 'Java', 'JS', 'C#'];
+const QUIZ_ROUND_SIZE = 5;
+const QUIZ_PASS_THRESHOLD = 3;
+const LOCK_COOLDOWN_MS = 8000;
+
+let laptopUnlocked = false;
+let quizRound = [];       // the 5 randomly-picked questions for this attempt
+let quizIndex = 0;
+let quizScore = 0;
+let quizAnswers = [];     // { question, chosenText, correct: bool }
+let quizAnswering = false; // prevents double-click during flash animation
+let generatedPassword = '';
+let lockCooldownUntil = 0;
+
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function toBinary4(n) {
+  return Math.max(0, Math.min(15, n)).toString(2).padStart(4, '0');
+}
+
+function currentPlayerName() {
+  const names = { 1: 'THEA', 2: 'PLAYER', 3: 'VEA', 4: 'VENICE' };
+  return names[confirmedCharIndex] || 'PLAYER';
+}
+
+function generatePassword(score) {
+  const lang = QUIZ_LANGUAGES[Math.floor(Math.random() * QUIZ_LANGUAGES.length)];
+  const langClean = lang.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  return `${currentPlayerName()}${langClean}${toBinary4(score)}`;
+}
+
+
+let cyberlandHitboxes = [
+  { x: 0, y: 0, w: W, h: 18, type: 'wall' },
+  { x: 0, y: H-18, w: W, h: 18, type: 'wall' },
+  { x: 0, y: 0, w: 18, h: H, type: 'wall' },
+  { x: W-18, y: 0, w: 18, h: H, type: 'wall' },
+  { x: 244.5, y: 500.3, w: 157.5, h: 68.4, type: 'tree' },
+  { x: 798.2, y: 500.3, w: 157.5, h: 68.4, type: 'tree' },
+  { x: 247.0, y: 230.0, w: 153.3, h: 71.4, type: 'tree' },
+  { x: 799.7, y: 230.0, w: 153.3, h: 71.4, type: 'tree' },
+  { x: 505.5, y: 581.2, w: 21.1, h: 93.8, type: 'wall' },
+  { x: 654.7, y: 581.2, w: 20.9, h: 93.8, type: 'wall' },
+  { x: 460.4, y: 605.3, w: 20, h: 15, type: 'post' },
+  { x: 684.2, y: 605.3, w: 20, h: 15, type: 'post' },
+  laptopHitbox,
+];
+
+const cyberlandOccluders = [
+  { srcX: 310, srcY: 705, srcW: 160, srcH: 110, dstX: 256.9, dstY: 438.2, dstW: 132.6, dstH: 68.3, anchorY: 568.7 },
+  { srcX: 978, srcY: 705, srcW: 160, srcH: 110, dstX: 810.5, dstY: 438.2, dstW: 132.6, dstH: 68.3, anchorY: 568.7 },
+  { srcX: 308, srcY: 275, srcW: 165, srcH: 110, dstX: 255.2, dstY: 170.9, dstW: 136.7, dstH: 68.4, anchorY: 301.4 },
+  { srcX: 975, srcY: 275, srcW: 165, srcH: 110, dstX: 808.0, dstY: 170.9, dstW: 136.7, dstH: 68.4, anchorY: 301.4 },
+  { srcX: 545, srcY: 915, srcW: 45,  srcH: 75,  dstX: 451.8, dstY: 568.7, dstW: 37.3,  dstH: 46.6, anchorY: 615.3 },
+  { srcX: 815, srcY: 915, srcW: 45,  srcH: 75,  dstX: 675.6, dstY: 568.7, dstW: 37.3,  dstH: 46.6, anchorY: 615.3 },
+];
+
+// ================= SHARED STATE =================
+let scene = 'classroom';
+let npcTalked = false;
+let guideConvoComplete = false;
+let teleportCooldown = 0;
+let showHit = false;
+let speechTimer = 0;
+const speechBubbleEl = document.getElementById('speechBubble');
+
+// ---- Quest sidebar (left-side toast, appears per milestone then fades) ----
+const questSidebarEl = document.getElementById('questSidebar');
+const questListEl = document.getElementById('questList');
+const QUEST_STEPS = [
+  'look around the classroom',
+  'talk to the guide',
+  'head into Cyber Land',
+  'crack the laptop password',
+  'watch the interview',
+  'download the interview file',
+  'upload it back at your desk'
+];
+let questCurrentIndex = 0; // index of the step currently in progress
+let questHideTimeoutId = null;
+
+function renderQuestSidebar() {
+  questListEl.innerHTML = '';
+  QUEST_STEPS.forEach((step, i) => {
+    const li = document.createElement('li');
+    li.textContent = step;
+    if (i < questCurrentIndex) li.className = 'qs-done';
+    else if (i === questCurrentIndex) li.className = 'qs-current';
+    else li.className = 'qs-pending';
+    questListEl.appendChild(li);
+  });
+}
+
+function advanceQuest(toIndex) {
+  questCurrentIndex = Math.max(questCurrentIndex, toIndex);
+  renderQuestSidebar();
+  showQuestSidebar();
+}
+
+function showQuestSidebar() {
+  if (questHideTimeoutId) { clearTimeout(questHideTimeoutId); questHideTimeoutId = null; }
+  questSidebarEl.classList.add('show');
+  questHideTimeoutId = setTimeout(() => {
+    questSidebarEl.classList.remove('show');
+    questHideTimeoutId = null;
+  }, 4500);
+}
+renderQuestSidebar();
+
+function currentHitboxes() {
+  if (scene === 'classroom') return npcTalked ? classroomHitboxes : classroomHitboxes.concat([npc]);
+  return cyberlandHitboxes;
+}
+
+function showSpeech(text, ms) {
+  speechBubbleEl.textContent = text;
+  speechBubbleEl.style.display = 'block';
+  speechTimer = ms || 2600;
+}
+
+// Sequential story dialogue: shows one line at a time, advances on player input (E / tap),
+// instead of auto-hiding after a fixed timer like showSpeech.
+let storyQueue = [];
+let storyActive = false;
+let storyOnComplete = null;
+let typewriterInterval = null;
+let typewriterDone = false;
+let currentStoryLine = '';
+const TYPEWRITER_MS_PER_CHAR = 22;
+
+function startStoryDialogue(lines, onComplete) {
+  storyQueue = lines.slice();
+  storyActive = true;
+  storyOnComplete = onComplete || null;
+  speechTimer = 0; // stop any auto-hide timer from showSpeech while story mode is active
+  showNextStoryLine();
+}
+
+function showNextStoryLine() {
+  if (typewriterInterval) { clearInterval(typewriterInterval); typewriterInterval = null; }
+
+  if (storyQueue.length === 0) {
+    storyActive = false;
+    speechBubbleEl.style.display = 'none';
+    speechBubbleEl.classList.remove('story', 'wide', 'medium', 'pop', 'typed');
+    const cb = storyOnComplete;
+    storyOnComplete = null;
+    if (cb) cb();
+    return;
+  }
+  const line = storyQueue.shift();
+  currentStoryLine = line;
+  speechBubbleEl.textContent = '';
+  speechBubbleEl.style.display = 'flex';
+  speechBubbleEl.classList.add('story');
+  speechBubbleEl.classList.remove('wide', 'medium', 'pop', 'typed');
+  if (line.length > 140) speechBubbleEl.classList.add('wide');
+  else if (line.length > 70) speechBubbleEl.classList.add('medium');
+
+  // Retrigger the pop-in animation
+  void speechBubbleEl.offsetWidth;
+  speechBubbleEl.classList.add('pop');
+
+  // Typewriter reveal
+  typewriterDone = false;
+  let charIndex = 0;
+  typewriterInterval = setInterval(() => {
+    charIndex++;
+    speechBubbleEl.textContent = line.slice(0, charIndex);
+    if (charIndex >= line.length) {
+      clearInterval(typewriterInterval);
+      typewriterInterval = null;
+      typewriterDone = true;
+      speechBubbleEl.classList.add('typed');
+    }
+  }, TYPEWRITER_MS_PER_CHAR);
+}
+
+function advanceStoryDialogue() {
+  if (!storyActive) return;
+  if (!typewriterDone) {
+    // First press while typing: skip straight to full text instead of advancing to the next line.
+    if (typewriterInterval) { clearInterval(typewriterInterval); typewriterInterval = null; }
+    speechBubbleEl.textContent = currentStoryLine;
+    typewriterDone = true;
+    speechBubbleEl.classList.add('typed');
+    return;
+  }
+  showNextStoryLine();
+}
+speechBubbleEl.addEventListener('click', (e) => { if (storyActive) { e.stopPropagation(); advanceStoryDialogue(); } });
+
+const player = {
+  x: 1085, y: 325,
+  w: 26, h: 14,
+  spriteH: 150,
+  speed: 2.6,
+  facing: 'left',
+  moving: false,
+  animT: 0
+};
+
+const CYBER_SPRITE_SCALE = 0.35;
+const CYBER_CAMERA_ZOOM = 3.9;
+const CYBER_SPEED = 1.3;
+
+let cameraZoom = 1, cameraLeft = 0, cameraTop = 0;
+function updateCamera() {
+  cameraZoom = (scene === 'cyberland') ? CYBER_CAMERA_ZOOM : 1;
+  const viewW = W / cameraZoom;
+  const viewH = H / cameraZoom;
+  let left = (player.x + player.w / 2) - viewW / 2;
+  let top = (player.y + player.h / 2) - viewH / 2;
+  left = Math.max(0, Math.min(W - viewW, left));
+  top = Math.max(0, Math.min(H - viewH, top));
+  cameraLeft = left;
+  cameraTop = top;
+}
+function applyCameraTransform(ctx) {
+  ctx.setTransform(cameraZoom, 0, 0, cameraZoom, -cameraLeft * cameraZoom, -cameraTop * cameraZoom);
+}
+function resetTransform(ctx) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function updateUIVisibility() {
+  const gameplayDisplay = (gameState === 'game') ? '' : 'none';
+  document.getElementById('dpad').style.display = (gameState === 'game') ? 'grid' : 'none';
+  document.getElementById('hint').style.display = gameplayDisplay;
+  document.getElementById('controls').style.display = gameplayDisplay;
+  document.getElementById('charSelectControls').style.display = (gameState === 'charselect') ? 'flex' : 'none';
+  if (gameState !== 'game') {
+    writeBtn.style.display = 'none';
+    talkBtn.style.display = 'none';
+  }
+}
+
+function startFade(next) {
+  gameState = 'fade';
+  fadeStartTime = Date.now();
+  fadeNextState = next;
+  updateUIVisibility();
+}
+
+function applyCharacterSprites(charIndex) {
+  // P2 (default) keeps the original hardcoded sprites — no changes, resolves immediately.
+  let newSrcs = null;
+  if (charIndex === 1) {
+    newSrcs = {
+      down:  "assets/images/players/thea/theaf.png",
+      up:    "assets/images/players/thea/theab.png",
+      left:  "assets/images/players/thea/theal.png",
+      right: "assets/images/players/thea/thear.png"
+    };
+  } else if (charIndex === 3) {
+    newSrcs = {
+      down:  "assets/images/players/vea/veaf.png",
+      up:    "assets/images/players/vea/veaba.png",
+      left:  "assets/images/players/vea/veale.png",
+      right: "assets/images/players/vea/veari.png"
+    };
+  } else if (charIndex === 4) {
+    newSrcs = {
+      down:  "assets/images/players/venice/heidenf.png",
+      up:    "assets/images/players/venice/heidenb.png",
+      left:  "assets/images/players/venice/heidenl.png",
+      right: "assets/images/players/venice/heidenr.png"
+    };
+  }
+
+  if (!newSrcs) return Promise.resolve(); // P2 (default): nothing to load
+
+  const loadPromises = Object.keys(newSrcs).map(key => {
+    return new Promise(resolve => {
+      const img = charImgs[key];
+      img.onload = () => {
+        try { refreshContentBox(key); } catch (e) { charContentBox[key] = null; }
+        resolve();
+      };
+      img.onerror = resolve; // don't hang forever if a file is missing/misnamed
+      img.src = newSrcs[key];
+    });
+  });
+  return Promise.all(loadPromises);
+}
+
+function csNext() { selectedCharIndex = Math.min(NUM_CHARSELECT_IMAGES - 1, selectedCharIndex + 1); }
+function csPrev() { selectedCharIndex = Math.max(0, selectedCharIndex - 1); }
+function csConfirm() {
+  if (selectedCharIndex < 1) return;
+  confirmedCharIndex = selectedCharIndex;
+  csConfirmBtn.disabled = true;
+  applyCharacterSprites(selectedCharIndex).then(() => {
+    gameState = 'game';
+    scene = 'classroom';
+    updateUIVisibility();
+    startStoryDialogue(['Ha. Nasan ang klase, akala ko late na ako!']);
+    advanceQuest(0);
+    csConfirmBtn.disabled = false;
+  });
+}
+
+document.getElementById('csPrevBtn').addEventListener('click', csPrev);
+document.getElementById('csNextBtn').addEventListener('click', csNext);
+const csConfirmBtn = document.getElementById('csConfirmBtn');
+csConfirmBtn.addEventListener('click', csConfirm);
+
+const stageEl = document.getElementById('stage');
+stageEl.addEventListener('click', () => {
+  if (gameState === 'menu') startFade('charselect');
+  else if (storyActive) advanceStoryDialogue();
+});
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  if (gameState === 'menu') {
+    startFade('charselect');
+    return;
+  }
+  if (gameState === 'charselect') {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowright') csNext();
+    else if (k === 'arrowleft') csPrev();
+    else if (k === ' ') csConfirm();
+    e.preventDefault();
+    return;
+  }
+  if (document.activeElement === boardInput) return;
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if (k === 'e' && !e.repeat) {
+    if (storyActive) advanceStoryDialogue();
+    else if (nearBoard && !modalOpen && scene === 'classroom') openBoardModal();
+    else if (nearNpc && scene === 'classroom' && !npcTalked) talkToNpc();
+    else if (nearLaptop && scene === 'cyberland' && !videoModalOpen && !laptopLockModalOpen && !downloadModalOpen) {
+      if (interviewDownloaded) { /* nothing left to do here */ }
+      else if (interviewWatched) openDownloadSequence();
+      else if (laptopUnlocked) openVideoModal();
+      else openLaptopLock();
+    }
+    else if (nearDesk && scene === 'classroom' && interviewDownloaded && !uploadModalOpen) openUploadModal();
+  }
+  if (k === 'escape') {
+    if (modalOpen) closeBoardModal();
+    if (videoModalOpen) closeVideoModal();
+    if (laptopLockModalOpen) closeLaptopLock();
+  }
+});
+window.addEventListener('keyup', e => {
+  if (document.activeElement === boardInput) return;
+  keys[e.key.toLowerCase()] = false;
+});
+
+function heldDir() {
+  if (modalOpen || videoModalOpen || storyActive || laptopLockModalOpen || downloadModalOpen || uploadModalOpen) return { dx: 0, dy: 0 };
+  let dx = 0, dy = 0;
+  if (keys['arrowup'] || keys['w']) dy -= 1;
+  if (keys['arrowdown'] || keys['s']) dy += 1;
+  if (keys['arrowleft'] || keys['a']) dx -= 1;
+  if (keys['arrowright'] || keys['d']) dx += 1;
+  return { dx, dy };
+}
+
+const padState = {};
+function bindHold(id, dx, dy) {
+  const el = document.getElementById(id);
+  const start = (e) => { padState[id] = {dx, dy}; e.preventDefault(); };
+  const end = (e) => { delete padState[id]; e.preventDefault(); };
+  el.addEventListener('mousedown', start);
+  el.addEventListener('touchstart', start, {passive:false});
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', end);
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+}
+bindHold('btnUp', 0, -1);
+bindHold('btnDown', 0, 1);
+bindHold('btnLeft', -1, 0);
+bindHold('btnRight', 1, 0);
+
+document.getElementById('toggleHit').addEventListener('click', () => {
+  showHit = !showHit;
+  document.getElementById('toggleHit').textContent = showHit ? 'Hide hitboxes' : 'Show hitboxes';
+});
+
+const boardPromptEl = document.getElementById('boardPrompt');
+const actionPromptEl = document.getElementById('actionPrompt');
+const writeBtn = document.getElementById('writeBtn');
+const talkBtn = document.getElementById('talkBtn');
+const boardModal = document.getElementById('boardModal');
+const boardInput = document.getElementById('boardInput');
+let modalOpen = false;
+
+const laptopBtn = document.getElementById('laptopBtn');
+const videoModal = document.getElementById('videoModal');
+const videoCloseBtn = document.getElementById('videoCloseBtn');
+const dialogueOverlay = document.getElementById('dialogueOverlay');
+const dialogueImg = document.getElementById('dialogueImg');
+const dialogueSkipBtn = document.getElementById('dialogueSkipBtn');
+let videoModalOpen = false;
+
+// ---- Laptop lock modal elements ----
+const laptopLockModal = document.getElementById('laptopLockModal');
+const laptopScreen = document.getElementById('laptopScreen');
+const lockStageQuiz = document.getElementById('lockStageQuiz');
+const lockStageResults = document.getElementById('lockStageResults');
+const lockStagePasswordReveal = document.getElementById('lockStagePasswordReveal');
+const lockStagePasswordEntry = document.getElementById('lockStagePasswordEntry');
+const quizProgressEl = document.getElementById('quizProgress');
+const quizQuestionEl = document.getElementById('quizQuestion');
+const quizChoicesEl = document.getElementById('quizChoices');
+const resultScoreText = document.getElementById('resultScoreText');
+const resultVerdictText = document.getElementById('resultVerdictText');
+const resultRecap = document.getElementById('resultRecap');
+const resultCloseBtn = document.getElementById('resultCloseBtn');
+const resultContinueBtn = document.getElementById('resultContinueBtn');
+const revealedPasswordText = document.getElementById('revealedPasswordText');
+const passwordRevealContinueBtn = document.getElementById('passwordRevealContinueBtn');
+const passwordInput = document.getElementById('passwordInput');
+const passwordCancelBtn = document.getElementById('passwordCancelBtn');
+const passwordSubmitBtn = document.getElementById('passwordSubmitBtn');
+const lockCooldownMsg = document.getElementById('lockCooldownMsg');
+let laptopLockModalOpen = false;
+
+function showLockStage(stage) {
+  lockStageQuiz.style.display = stage === 'quiz' ? 'flex' : 'none';
+  lockStageQuiz.style.flexDirection = 'column';
+  lockStageResults.style.display = stage === 'results' ? 'block' : 'none';
+  lockStagePasswordReveal.style.display = stage === 'reveal' ? 'block' : 'none';
+  lockStagePasswordEntry.style.display = stage === 'entry' ? 'block' : 'none';
+}
+
+function flashLaptop(kind) {
+  laptopScreen.classList.remove('flash-ok', 'flash-bad');
+  void laptopScreen.offsetWidth; // restart animation
+  laptopScreen.classList.add(kind === 'ok' ? 'flash-ok' : 'flash-bad');
+}
+
+function shakeLaptop() {
+  laptopScreen.classList.remove('shake');
+  void laptopScreen.offsetWidth;
+  laptopScreen.classList.add('shake');
+}
+
+function openLaptopLock() {
+  if (Date.now() < lockCooldownUntil) {
+    // Still in cooldown — briefly shake and bail without opening.
+    return;
+  }
+  laptopLockModalOpen = true;
+  laptopLockModal.classList.add('open');
+  laptopBtn.style.display = 'none';
+  startQuizRound();
+}
+
+function closeLaptopLock() {
+  laptopLockModalOpen = false;
+  laptopLockModal.classList.remove('open');
+}
+
+function startQuizRound() {
+  quizRound = shuffleArray(QUIZ_QUESTION_POOL).slice(0, QUIZ_ROUND_SIZE);
+  quizIndex = 0;
+  quizScore = 0;
+  quizAnswers = [];
+  quizAnswering = false;
+  showLockStage('quiz');
+  renderQuizQuestion();
+}
+
+function renderQuizProgress() {
+  quizProgressEl.innerHTML = '';
+  for (let i = 0; i < quizRound.length; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    if (i < quizAnswers.length) dot.classList.add(quizAnswers[i].correct ? 'correct' : 'wrong');
+    else if (i === quizIndex) dot.classList.add('current');
+    quizProgressEl.appendChild(dot);
+  }
+}
+
+function renderQuizQuestion() {
+  renderQuizProgress();
+  const q = quizRound[quizIndex];
+  quizQuestionEl.textContent = `Q${quizIndex + 1}/${quizRound.length}: ${q.q}`;
+  quizChoicesEl.innerHTML = '';
+  const order = shuffleArray(q.choices.map((text, i) => ({ text, isCorrect: i === q.correct })));
+  order.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'quizChoiceBtn';
+    btn.textContent = choice.text;
+    btn.addEventListener('click', () => handleQuizAnswer(choice, btn, order));
+    quizChoicesEl.appendChild(btn);
+  });
+}
+
+function handleQuizAnswer(choice, btnEl, order) {
+  if (quizAnswering) return;
+  quizAnswering = true;
+  const allBtns = quizChoicesEl.querySelectorAll('.quizChoiceBtn');
+  allBtns.forEach(b => b.disabled = true);
+
+  if (choice.isCorrect) {
+    btnEl.classList.add('correct');
+    flashLaptop('ok');
+    quizScore++;
+  } else {
+    btnEl.classList.add('wrong');
+    flashLaptop('bad');
+    shakeLaptop();
+    // reveal the correct one too
+    const correctText = order.find(o => o.isCorrect).text;
+    allBtns.forEach(b => { if (b.textContent === correctText) b.classList.add('correct'); });
+  }
+  quizAnswers.push({ question: quizRound[quizIndex].q, chosenText: choice.text, correct: choice.isCorrect });
+
+  setTimeout(() => {
+    quizIndex++;
+    quizAnswering = false;
+    if (quizIndex < quizRound.length) {
+      renderQuizQuestion();
+    } else {
+      showQuizResults();
+    }
+  }, 650);
+}
+
+// ---- Confetti burst (canvas particles, no assets) ----
+const confettiCanvas = document.getElementById('confettiCanvas');
+const confettiCtx = confettiCanvas.getContext('2d');
+let confettiParticles = [];
+let confettiRAF = null;
+const CONFETTI_COLORS = ['#4dff88', '#6dffa0', '#ffe14d', '#4dd2ff', '#ff4d8a', '#ffffff'];
+
+function fireConfetti() {
+  const rect = laptopScreen.getBoundingClientRect();
+  confettiCanvas.width = rect.width;
+  confettiCanvas.height = rect.height;
+  confettiParticles = [];
+  const count = 90;
+  for (let i = 0; i < count; i++) {
+    confettiParticles.push({
+      x: rect.width / 2,
+      y: rect.height * 0.35,
+      vx: (Math.random() - 0.5) * 9,
+      vy: (Math.random() - 1.4) * 8,
+      size: 4 + Math.random() * 5,
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 0.3,
+      life: 0,
+      maxLife: 70 + Math.random() * 30
+    });
+  }
+  if (confettiRAF) cancelAnimationFrame(confettiRAF);
+  confettiTick();
+}
+
+function confettiTick() {
+  confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  let anyAlive = false;
+  confettiParticles.forEach(p => {
+    if (p.life >= p.maxLife) return;
+    anyAlive = true;
+    p.vy += 0.22; // gravity
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.vrot;
+    p.life++;
+    const alpha = 1 - (p.life / p.maxLife);
+    confettiCtx.save();
+    confettiCtx.globalAlpha = Math.max(0, alpha);
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rot);
+    confettiCtx.fillStyle = p.color;
+    confettiCtx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+    confettiCtx.restore();
+  });
+  if (anyAlive) {
+    confettiRAF = requestAnimationFrame(confettiTick);
+  } else {
+    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    confettiRAF = null;
+  }
+}
+
+function showQuizResults() {
+  showLockStage('results');
+  resultScoreText.textContent = `${quizScore} / ${quizRound.length}`;
+  const passed = quizScore >= QUIZ_PASS_THRESHOLD;
+  resultRecap.innerHTML = '';
+  quizAnswers.forEach((a, i) => {
+    const line = document.createElement('div');
+    line.className = a.correct ? 'r-correct' : 'r-wrong';
+    line.textContent = `Q${i + 1}: ${a.question}`;
+    resultRecap.appendChild(line);
+  });
+
+  if (passed) {
+    resultVerdictText.textContent = "you're in, making your code now...";
+    resultContinueBtn.style.display = 'inline-block';
+    resultCloseBtn.textContent = 'close';
+    generatedPassword = generatePassword(quizScore);
+    fireConfetti();
+  } else {
+    resultVerdictText.textContent = `not quite, need ${QUIZ_PASS_THRESHOLD}/${quizRound.length}. locked for a bit...`;
+    resultContinueBtn.style.display = 'none';
+    lockCooldownUntil = Date.now() + LOCK_COOLDOWN_MS;
+  }
+}
+
+resultContinueBtn.addEventListener('click', () => {
+  showLockStage('reveal');
+  revealedPasswordText.textContent = generatedPassword;
+});
+resultCloseBtn.addEventListener('click', closeLaptopLock);
+
+passwordRevealContinueBtn.addEventListener('click', () => {
+  showLockStage('entry');
+  passwordInput.value = '';
+  lockCooldownMsg.style.display = 'none';
+  setTimeout(() => passwordInput.focus(), 50);
+});
+
+function checkPasswordSubmit() {
+  if (Date.now() < lockCooldownUntil) return;
+  const val = passwordInput.value.trim();
+  if (val === generatedPassword) {
+    flashLaptop('ok');
+    laptopUnlocked = true;
+    advanceQuest(3);
+    setTimeout(() => {
+      closeLaptopLock();
+      openVideoModal();
+    }, 500);
+  } else {
+    flashLaptop('bad');
+    shakeLaptop();
+    passwordInput.value = '';
+    lockCooldownMsg.textContent = "that's not it, try again";
+    lockCooldownMsg.style.display = 'block';
+  }
+}
+passwordSubmitBtn.addEventListener('click', checkPasswordSubmit);
+passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') checkPasswordSubmit(); });
+passwordCancelBtn.addEventListener('click', closeLaptopLock);
+
+
+
+// Each segment: video pauses once currentTime reaches `pauseAt` (seconds),
+// shows `img` for `holdMs`, then resumes playback.
+// (No segments currently — question cards are now baked directly into the video.)
+const dialogueSegments = [];
+let nextSegmentIndex = 0;
+let dialogueActive = false;
+let dialogueTimeoutId = null;
+let watchIntervalId = null;
+
+function startSegmentWatcher() {
+  // No-op: dialogueSegments is empty and Google Drive's iframe has no time-tracking API anyway.
+}
+function stopSegmentWatcher() {
+  if (watchIntervalId) { clearInterval(watchIntervalId); watchIntervalId = null; }
+}
+
+function showDialogueImage(seg) {
+  dialogueActive = true;
+  dialogueImg.src = seg.img;
+  dialogueOverlay.classList.add('open');
+  dialogueSkipBtn.style.display = 'block';
+  dialogueTimeoutId = setTimeout(advanceDialogue, seg.holdMs);
+}
+function advanceDialogue() {
+  if (!dialogueActive) return;
+  if (dialogueTimeoutId) { clearTimeout(dialogueTimeoutId); dialogueTimeoutId = null; }
+  dialogueActive = false;
+  dialogueOverlay.classList.remove('open');
+  dialogueSkipBtn.style.display = 'none';
+  nextSegmentIndex++;
+}
+dialogueSkipBtn.addEventListener('click', advanceDialogue);
+
+let interviewWatched = false; // true once the video has been open ~as long as the real interview runs
+let interviewWatchTimeoutId = null;
+
+function openVideoModal() {
+  videoModalOpen = true;
+  videoModal.classList.add('open');
+  laptopBtn.style.display = 'none';
+  nextSegmentIndex = 0;
+  dialogueActive = false;
+  dialogueOverlay.classList.remove('open');
+  dialogueSkipBtn.style.display = 'none';
+
+  const frameEl = document.getElementById('videoFrame');
+  frameEl.innerHTML = `<iframe src="https://drive.google.com/file/d/${GDRIVE_FILE_ID}/preview" allow="autoplay" frameborder="0"></iframe>`;
+
+  // Google Drive's embed has no JS API to detect playback progress or completion,
+  // so "watched" is approximated by requiring the modal to stay open ~the real video length.
+  if (interviewWatchTimeoutId) clearTimeout(interviewWatchTimeoutId);
+  if (!interviewWatched) {
+    interviewWatchTimeoutId = setTimeout(() => {
+      interviewWatched = true;
+      advanceQuest(4);
+    }, INTERVIEW_DURATION_MS);
+  }
+}
+function closeVideoModal() {
+  videoModalOpen = false;
+  videoModal.classList.remove('open');
+  stopSegmentWatcher();
+  if (dialogueTimeoutId) { clearTimeout(dialogueTimeoutId); dialogueTimeoutId = null; }
+  dialogueActive = false;
+  dialogueOverlay.classList.remove('open');
+  dialogueSkipBtn.style.display = 'none';
+  if (interviewWatchTimeoutId) { clearTimeout(interviewWatchTimeoutId); interviewWatchTimeoutId = null; }
+  document.getElementById('videoFrame').innerHTML = '';
+}
+laptopBtn.addEventListener('click', () => {
+  if (!nearLaptop || videoModalOpen || laptopLockModalOpen || downloadModalOpen) return;
+  if (interviewWatched) return; // button is hidden in this state anyway; download prompt takes over
+  if (laptopUnlocked) openVideoModal(); else openLaptopLock();
+});
+videoCloseBtn.addEventListener('click', closeVideoModal);
+
+// ---- Post-interview download sequence ----
+const downloadPromptBtn = document.getElementById('downloadPromptBtn');
+const downloadModal = document.getElementById('downloadModal');
+const downloadBarFill = document.getElementById('downloadBarFill');
+const downloadPercentText = document.getElementById('downloadPercentText');
+let interviewDownloaded = false;
+let downloadModalOpen = false;
+const DOWNLOAD_DURATION_MS = 5000;
+
+function openDownloadSequence() {
+  downloadModalOpen = true;
+  downloadModal.classList.add('open');
+  downloadPromptBtn.style.display = 'none';
+  const start = Date.now();
+  downloadBarFill.style.width = '0%';
+  downloadPercentText.textContent = '0%';
+  const tick = () => {
+    const elapsed = Date.now() - start;
+    const pct = Math.min(100, Math.round((elapsed / DOWNLOAD_DURATION_MS) * 100));
+    downloadBarFill.style.width = pct + '%';
+    downloadPercentText.textContent = pct + '%';
+    if (pct < 100) {
+      requestAnimationFrame(tick);
+    } else {
+      interviewDownloaded = true;
+      advanceQuest(5);
+      setTimeout(() => {
+        downloadModalOpen = false;
+        downloadModal.classList.remove('open');
+      }, 500);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+downloadPromptBtn.addEventListener('click', () => { if (nearLaptop && interviewWatched && !interviewDownloaded && !downloadModalOpen) openDownloadSequence(); });
+
+// ---- Desk / upload sequence (ending) ----
+const deskBtn = document.getElementById('deskBtn');
+deskBtn.addEventListener('click', () => { if (nearDesk && interviewDownloaded && !uploadModalOpen) openUploadModal(); });
+const uploadModal = document.getElementById('uploadModal');
+const uploadStageIdle = document.getElementById('uploadStageIdle');
+const uploadStageProgress = document.getElementById('uploadStageProgress');
+const uploadStageDone = document.getElementById('uploadStageDone');
+const uploadBarFill = document.getElementById('uploadBarFill');
+const uploadPercentText = document.getElementById('uploadPercentText');
+const uploadStartBtn = document.getElementById('uploadStartBtn');
+const uploadCancelBtn = document.getElementById('uploadCancelBtn');
+const uploadFinalMessage = document.getElementById('uploadFinalMessage');
+const uploadFinalImage = document.getElementById('uploadFinalImage');
+const uploadDataInfo = document.getElementById('uploadDataInfo');
+const msgNotification = document.getElementById('msgNotification');
+const endingFade = document.getElementById('endingFade');
+let uploadModalOpen = false;
+const UPLOAD_DURATION_MS = 8000;
+const ENDING_MESSAGE = 'Lahat tayo makakabawi at papasa sa finals <3';
+const ENGINEER_INFO = [
+  ['Computer Engineer Name', 'Renz Jonathan Alib'],
+  ['Occupation', 'DevOps Engineer'],
+  ['Education', 'Batangas State University'],
+  ['Residence', 'New Zealand'],
+  ['Reason for choosing computer engineering', 'Passion and Interest']
+];
+
+function openUploadModal() {
+  uploadModalOpen = true;
+  uploadModal.classList.add('open');
+  deskBtn.style.display = 'none';
+  uploadStageIdle.style.display = 'block';
+  uploadStageProgress.style.display = 'none';
+  uploadStageDone.style.display = 'none';
+  uploadBarFill.style.width = '0%';
+  uploadPercentText.textContent = '0%';
+  uploadFinalMessage.textContent = '';
+  uploadFinalImage.style.display = 'none';
+  uploadDataInfo.style.display = 'none';
+  uploadDataInfo.innerHTML = '';
+  msgNotification.classList.remove('show');
+}
+function closeUploadModal() {
+  uploadModalOpen = false;
+  uploadModal.classList.remove('open');
+}
+uploadCancelBtn.addEventListener('click', closeUploadModal);
+
+uploadStartBtn.addEventListener('click', () => {
+  uploadStageIdle.style.display = 'none';
+  uploadStageProgress.style.display = 'block';
+  const start = Date.now();
+  const tick = () => {
+    const elapsed = Date.now() - start;
+    const pct = Math.min(100, Math.round((elapsed / UPLOAD_DURATION_MS) * 100));
+    uploadBarFill.style.width = pct + '%';
+    uploadPercentText.textContent = pct + '%';
+    if (pct < 100) {
+      requestAnimationFrame(tick);
+    } else {
+      setTimeout(showUploadDone, 400);
+    }
+  };
+  requestAnimationFrame(tick);
+});
+
+function showUploadDone() {
+  uploadStageProgress.style.display = 'none';
+  uploadStageDone.style.display = 'block';
+  advanceQuest(6);
+
+  // 1) Type out the engineer's data info
+  uploadDataInfo.style.display = 'block';
+  const fullInfoText = ENGINEER_INFO.map(([label, val]) => `${label}: ${val}`).join('\n');
+  let infoIndex = 0;
+  const infoInterval = setInterval(() => {
+    infoIndex++;
+    uploadDataInfo.textContent = fullInfoText.slice(0, infoIndex);
+    if (infoIndex >= fullInfoText.length) {
+      clearInterval(infoInterval);
+      // 2) Hold, then hide the info block and show a notification instead
+      setTimeout(() => {
+        uploadDataInfo.style.display = 'none';
+        msgNotification.classList.add('show');
+      }, 2500);
+    }
+  }, 18);
+}
+
+// 3) Player clicks the notification -> reveal the <3 message, then the "ILOVEYOU" virus corrupts everything
+msgNotification.addEventListener('click', () => {
+  msgNotification.classList.remove('show');
+  typewriterInto(uploadFinalMessage, ENDING_MESSAGE, 40, () => {
+    uploadFinalImage.style.display = 'block';
+    setTimeout(startVirusCorruption, 1600);
+  });
+});
+
+// ---- "ILOVEYOU" virus corruption sequence ----
+const virusOverlay = document.getElementById('virusOverlay');
+const virusMainText = document.getElementById('virusMainText');
+const virusSubText = document.getElementById('virusSubText');
+const virusTextEl = document.getElementById('virusText');
+const GLITCH_CHARS = '!<>-_\\/[]{}—=+*^?#01';
+
+function scrambleReveal(el, finalText, durationMs, onDone) {
+  const len = finalText.length;
+  const startTime = Date.now();
+  const iv = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const revealCount = Math.floor((elapsed / durationMs) * len);
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      if (i < revealCount) out += finalText[i];
+      else if (finalText[i] === ' ') out += ' ';
+      else out += GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
+    }
+    el.textContent = out;
+    if (revealCount >= len) {
+      clearInterval(iv);
+      el.textContent = finalText;
+      if (onDone) onDone();
+    }
+  }, 45);
+}
+
+function spawnGlitchLine() {
+  const line = document.createElement('div');
+  line.className = 'glitchLine';
+  line.style.top = (Math.random() * 100) + '%';
+  line.style.opacity = (0.25 + Math.random() * 0.5).toFixed(2);
+  line.style.height = (1 + Math.random() * 4) + 'px';
+  virusOverlay.appendChild(line);
+  setTimeout(() => line.remove(), 120 + Math.random() * 200);
+}
+
+function startVirusCorruption() {
+  stageEl.classList.add('corrupting');
+  virusOverlay.classList.add('active');
+
+  let glitchCount = 0;
+  const glitchInterval = setInterval(() => {
+    spawnGlitchLine();
+    glitchCount++;
+    if (glitchCount > 40) clearInterval(glitchInterval);
+  }, 70);
+
+  setTimeout(() => {
+    virusTextEl.classList.add('show');
+    scrambleReveal(virusMainText, 'ILOVEYOU.exe', 1400, () => {
+      scrambleReveal(virusSubText, 'Your device has been compromised...', 1600, () => {
+        setTimeout(() => {
+          clearInterval(glitchInterval);
+          playEndingFade();
+        }, 1400);
+      });
+    });
+  }, 900);
+}
+
+// Generic typewriter helper for arbitrary elements (separate from the story-dialogue one).
+function typewriterInto(el, text, msPerChar, onDone) {
+  el.textContent = '';
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    el.textContent = text.slice(0, i);
+    if (i >= text.length) {
+      clearInterval(iv);
+      if (onDone) onDone();
+    }
+  }, msPerChar);
+}
+
+function playEndingFade() {
+  endingFade.classList.add('active');
+  // Let "to be continued..." finish its fade-in (1.2s delay + 1.5s transition, see #endingFadeText CSS),
+  // then clear the ILOVEYOU.exe overlay and screen-shake so only the ending message remains.
+  setTimeout(() => {
+    virusOverlay.classList.remove('active');
+    virusTextEl.classList.remove('show');
+    stageEl.classList.remove('corrupting');
+  }, 2800);
+}
+
+function openBoardModal() {
+  modalOpen = true;
+  boardModal.classList.add('open');
+  player.moving = false;
+  player.facing = 'up';
+  boardInput.value = '';
+  setTimeout(() => boardInput.focus(), 30);
+}
+function closeBoardModal() {
+  modalOpen = false;
+  boardModal.classList.remove('open');
+}
+function submitBoardMessage() {
+  const text = boardInput.value.trim();
+  if (text) {
+    const color = boardColors[Math.floor(Math.random() * boardColors.length)];
+    boardMessages.push({ text: text.slice(0, 28), color });
+    if (boardMessages.length > MAX_BOARD_LINES) boardMessages.shift();
+  }
+  closeBoardModal();
+}
+writeBtn.addEventListener('click', () => { if (nearBoard && !modalOpen) openBoardModal(); });
+document.getElementById('boardSubmit').addEventListener('click', submitBoardMessage);
+document.getElementById('boardCancel').addEventListener('click', closeBoardModal);
+boardInput.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter') submitBoardMessage();
+  if (e.key === 'Escape') closeBoardModal();
+});
+
+function talkToNpc() {
+  npcTalked = true;
+  startStoryDialogue([
+    'Sino ka? Nananaginip ba ako?',
+    'Ako ang hari ng computer engineers at nalaman ko na computer engineering students kayo at ayaw ko na malampasan nyo ako balang araw, kaya kinuha ko mga kaklase mo!',
+    'Hari ng computer engineers? Meganon ba? Pati bakit ako hindi mo kinuha? Nakakaoffend ka ha!',
+    'Para mapalaya ko ang mga kaklase mo, kailangan mo mag interview ng isang computer engineer at alamin kung ano nga ba ito',
+    'Ano naman kinalaman niyan sa pagiging hari mo?',
+    'Manahimik kana! Dami mong tanong'
+  ], () => { guideConvoComplete = true; advanceQuest(1); });
+}
+talkBtn.addEventListener('click', () => {
+  if (storyActive) { advanceStoryDialogue(); return; }
+  if (nearNpc && scene === 'classroom') talkToNpc();
+});
+
+function drawMenu() {
+  resetTransform(bgCtx);
+  bgCtx.clearRect(0, 0, W, H);
+  bgCtx.drawImage(startupImg, 0, 0, W, H);
+
+  const elapsed = Date.now() - gameStartTime;
+
+  bgCtx.fillStyle = 'rgba(0,0,0,0.3)';
+  const starPatternCycle = Math.floor(elapsed / 100) % 8;
+  for (let y = 0; y < H; y += 30) {
+    for (let x = 0; x < W; x += 30) {
+      if (Math.random() > 0.6 || (starPatternCycle & (1 << ((x + y) % 8))) === 0) {
+        bgCtx.fillRect(x + 5, y + 5, 2, 2);
+      }
+    }
+  }
+
+  const textAlpha = 0.5 + 0.5 * Math.sin(elapsed / 500);
+  bgCtx.fillStyle = `rgba(255,255,255,${textAlpha})`;
+  bgCtx.font = 'bold 18px monospace';
+  bgCtx.textAlign = 'center';
+  bgCtx.fillText('TAP OR PRESS ANY KEY TO START', W/2, H - 40);
+}
+
+function drawCharSelect() {
+  resetTransform(bgCtx);
+  bgCtx.clearRect(0, 0, W, H);
+  bgCtx.fillStyle = '#0a0a12';
+  bgCtx.fillRect(0, 0, W, H);
+
+  const img = charSelectImgs[selectedCharIndex];
+  const scale = Math.min(W / img.naturalWidth, (H * 0.8) / img.naturalHeight);
+  const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+  const dx = (W - dw) / 2, dy = (H - dh) / 2 - 20;
+  bgCtx.drawImage(img, dx, dy, dw, dh);
+
+  bgCtx.textAlign = 'center';
+  bgCtx.fillStyle = '#fff';
+  bgCtx.font = 'bold 22px monospace';
+  bgCtx.fillText(
+    selectedCharIndex === 0 ? 'PICK YOUR CHARACTER' : `CHARACTER ${selectedCharIndex}`,
+    W / 2, H - 50
+  );
+  if (selectedCharIndex >= 1) {
+    bgCtx.font = '16px monospace';
+    bgCtx.fillStyle = 'rgba(255,255,255,0.8)';
+    bgCtx.fillText('SPACE TO CONFIRM', W / 2, H - 22);
+  }
+
+  bgCtx.font = 'bold 28px monospace';
+  bgCtx.fillStyle = selectedCharIndex > 0 ? '#fff' : 'rgba(255,255,255,0.25)';
+  bgCtx.fillText('<', 40, H / 2);
+  bgCtx.fillStyle = selectedCharIndex < NUM_CHARSELECT_IMAGES - 1 ? '#fff' : 'rgba(255,255,255,0.25)';
+  bgCtx.fillText('>', W - 40, H / 2);
+}
+
+function drawFadeTransition() {
+  const elapsed = Date.now() - fadeStartTime;
+  const half = FADE_DURATION / 2;
+  if (elapsed < half) {
+    drawMenu();
+    bgCtx.fillStyle = `rgba(0,0,0,${elapsed / half})`;
+    bgCtx.fillRect(0, 0, W, H);
+  } else if (elapsed < FADE_DURATION) {
+    if (fadeNextState === 'charselect') drawCharSelect();
+    bgCtx.fillStyle = `rgba(0,0,0,${1 - (elapsed - half) / half})`;
+    bgCtx.fillRect(0, 0, W, H);
+  } else {
+    gameState = fadeNextState;
+    updateUIVisibility();
+  }
+}
+
+function drawBackground() {
+  resetTransform(bgCtx);
+  bgCtx.clearRect(0, 0, W, H);
+  applyCameraTransform(bgCtx);
+  if (scene === 'classroom' && roomLoaded) bgCtx.drawImage(roomImg, 0, 0, W, H);
+  else if (scene === 'cyberland' && cyberLoaded) bgCtx.drawImage(cyberImg, 0, 0, W, H);
+
+  document.getElementById('sceneTitle').textContent =
+    scene === 'classroom' ? 'Room 01AB — walk around' : 'Cyber Land';
+  document.getElementById('hint').textContent =
+    scene === 'classroom'
+      ? 'arrow keys / WASD to move — talk to the guide by the portal, then walk in to head to Cyber Land'
+      : 'arrow keys / WASD to move — walk into the glowing portal to head back to the classroom';
+}
+
+function teleportTo(newScene, spawnX, spawnY) {
+  scene = newScene;
+  player.x = spawnX; player.y = spawnY;
+  player.moving = false;
+  teleportCooldown = 30;
+  drawBackground();
+}
+
+function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function tryMove(dx, dy) {
+  player.moving = (dx !== 0 || dy !== 0);
+  if (!player.moving) return;
+  const len = Math.hypot(dx, dy) || 1;
+  const spd = (scene === 'cyberland') ? CYBER_SPEED : player.speed;
+  const mvx = (dx/len) * spd;
+  const mvy = (dy/len) * spd;
+
+  const hb = currentHitboxes();
+
+  let nx = player.x + mvx;
+  const boxX = { x: nx, y: player.y, w: player.w, h: player.h };
+  if (!hb.some(box => rectsOverlap(boxX, box))) player.x = nx;
+
+  let ny = player.y + mvy;
+  const boxY = { x: player.x, y: ny, w: player.w, h: player.h };
+  if (!hb.some(box => rectsOverlap(boxY, box))) player.y = ny;
+
+  if (dx > 0) player.facing = 'right';
+  else if (dx < 0) player.facing = 'left';
+  else if (dy > 0) player.facing = 'down';
+  else if (dy < 0) player.facing = 'up';
+}
+
+const HIP_FRAC = { down: 0.58, up: 0.57, left: 0.55, right: 0.55 };
+
+function drawPlayer(ctx) {
+  const img = charImgs[player.facing];
+  const hipFrac = HIP_FRAC[player.facing];
+
+  const cx = player.x + player.w/2;
+  const feetY = player.y + player.h;
+
+  const spriteH = player.spriteH * (scene === 'cyberland' ? CYBER_SPRITE_SCALE : 1);
+
+  // Use the actual visible-character bounding box (not the full padded canvas) so
+  // sprites with different amounts of empty margin still render at a consistent size.
+  let box = charContentBox[player.facing];
+  if (!box || !box.w || !box.h) {
+    const fw = img.naturalWidth, fh = img.naturalHeight;
+    box = (fw && fh) ? { x: 0, y: 0, w: fw, h: fh } : null;
+  }
+  if (!box) return; // image not decoded yet this frame — skip drawing rather than draw garbage
+  const BX = box.x, BY = box.y, BW = box.w, BH = box.h;
+  const spriteW = spriteH * (BW / BH);
+
+  const hipSrcY = BY + BH * hipFrac;      // absolute source-image Y of the hip split line
+  const legSrcH = (BY + BH) - hipSrcY;    // height of the leg region in source pixels
+
+  let swing = 0, bob = 0;
+  if (player.moving) {
+    player.animT += 0.22;
+    swing = Math.sin(player.animT);
+    bob = Math.abs(Math.sin(player.animT)) * 2.5;
+  } else {
+    player.animT = 0;
+  }
+
+  const top = feetY - spriteH - bob;
+  const left = cx - spriteW/2;
+  const hipDestY = top + spriteH * hipFrac;
+  const legDestH = spriteH - spriteH * hipFrac;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.beginPath();
+  ctx.ellipse(cx, feetY, spriteW * 0.30, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.drawImage(img, BX, BY, BW, BH * hipFrac, left, top, spriteW, spriteH * hipFrac);
+
+  if (player.facing === 'down' || player.facing === 'up') {
+    const maxSwingAngle = 0.34;
+    ctx.save();
+    ctx.translate(cx, hipDestY);
+    ctx.rotate(swing * maxSwingAngle);
+    ctx.drawImage(img, BX, hipSrcY, BW/2, legSrcH, -spriteW/2, 0, spriteW/2, legDestH);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, hipDestY);
+    ctx.rotate(-swing * maxSwingAngle);
+    ctx.drawImage(img, BX + BW/2, hipSrcY, BW/2, legSrcH, 0, 0, spriteW/2, legDestH);
+    ctx.restore();
+  } else {
+    // Left/right: same leg swing animation
+    const maxSwingAngle = 0.34;
+    ctx.save();
+    ctx.translate(cx, hipDestY);
+    ctx.rotate(swing * maxSwingAngle);
+    ctx.drawImage(img, BX, hipSrcY, BW/2, legSrcH, -spriteW/2, 0, spriteW/2, legDestH);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, hipDestY);
+    ctx.rotate(-swing * maxSwingAngle);
+    ctx.drawImage(img, BX + BW/2, hipSrcY, BW/2, legSrcH, 0, 0, spriteW/2, legDestH);
+    ctx.restore();
+  }
+}
+
+function drawBoardMessages(ctx) {
+  if (!boardMessages.length) return;
+  ctx.save();
+  ctx.font = "17px 'Comic Sans MS', 'Segoe Print', cursive";
+  ctx.textBaseline = 'alphabetic';
+  boardMessages.forEach((m, i) => {
+    ctx.save();
+    const x = BOARD_TEXT_X, y = BOARD_TEXT_Y + i * BOARD_LINE_H;
+    ctx.translate(x, y);
+    ctx.rotate((Math.sin(i * 7.3) * 0.02));
+    ctx.fillStyle = m.color;
+    ctx.fillText(m.text, 0, 0);
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+function drawNpc(ctx) {
+  const cx = npc.x + npc.w/2, feetY = npc.y + npc.h;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath();
+  ctx.ellipse(cx, feetY, 16, 5, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#3a5fa0';
+  ctx.fillRect(cx - 10, feetY - 46, 20, 34);
+  ctx.fillStyle = '#e8b98a';
+  ctx.beginPath();
+  ctx.arc(cx, feetY - 54, 10, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#222';
+  ctx.fillRect(cx-4, feetY-56, 2, 2);
+  ctx.fillRect(cx+2, feetY-56, 2, 2);
+  ctx.restore();
+
+  ctx.save();
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#dfe8ff';
+  ctx.textAlign = 'center';
+  ctx.fillText('Guide', cx, feetY - 66);
+  ctx.restore();
+}
+
+let portalT = 0;
+function drawPortalSwirl(ctx, rect, hue) {
+  portalT += 0.05;
+  const cx = rect.x + rect.w/2, cy = rect.y + rect.h/2;
+  const rx = rect.w/2, ry = rect.h/2;
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  const grad = ctx.createRadialGradient(0,0,2, 0,0, Math.max(rx,ry));
+  grad.addColorStop(0, `hsla(${hue}, 100%, 85%, 0.95)`);
+  grad.addColorStop(0.5, `hsla(${hue}, 100%, 60%, 0.55)`);
+  grad.addColorStop(1, `hsla(${hue}, 100%, 40%, 0)`);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.strokeStyle = `hsla(${hue}, 100%, 80%, 0.9)`;
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    ctx.save();
+    ctx.rotate(portalT + i * (Math.PI*2/3));
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx*0.7, ry*0.7, 0, 0, Math.PI*1.3);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawLaptopGlow(ctx) {
+  if (!nearLaptop) return;
+  const cx = laptop.x + laptop.w/2, cy = laptop.y + laptop.h/2;
+  const pulse = 0.6 + 0.4 * Math.sin(portalT * 1.6);
+  ctx.save();
+  ctx.strokeStyle = `rgba(120, 220, 255, ${pulse})`;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + laptop.h/2, laptop.w/2 + 10, 14, 0, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHitboxes(ctx) {
+  ctx.save();
+  const hb = currentHitboxes();
+  for (const box of hb) {
+    if (box.type === 'chair') ctx.strokeStyle = 'rgba(255,80,80,0.9)';
+    else if (box.type === 'desk') ctx.strokeStyle = 'rgba(255,200,60,0.9)';
+    else if (box.type === 'wall' || box.type === 'board') ctx.strokeStyle = 'rgba(120,160,255,0.6)';
+    else if (box.type === 'door') ctx.strokeStyle = 'rgba(255,140,0,0.9)';
+    else if (box.type === 'npc') ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    else ctx.strokeStyle = 'rgba(180,120,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
+  }
+  if (scene === 'classroom') {
+    ctx.strokeStyle = 'rgba(255,220,0,0.9)';
+    ctx.strokeRect(boardZone.x, boardZone.y, boardZone.w, boardZone.h);
+    ctx.strokeStyle = 'rgba(0,220,255,0.9)';
+    ctx.strokeRect(portal.x, portal.y, portal.w, portal.h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.strokeRect(npcTalkZone.x, npcTalkZone.y, npcTalkZone.w, npcTalkZone.h);
+  } else {
+    ctx.strokeStyle = 'rgba(0,220,255,0.9)';
+    ctx.strokeRect(backPortal.x, backPortal.y, backPortal.w, backPortal.h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.strokeRect(laptopZone.x, laptopZone.y, laptopZone.w, laptopZone.h);
+  }
+  ctx.strokeStyle = 'rgba(60,255,120,0.95)';
+  ctx.strokeRect(player.x, player.y, player.w, player.h);
+  ctx.restore();
+}
+
+function drawScene() {
+  updateCamera();
+  drawBackground();
+
+  resetTransform(fgCtx);
+  fgCtx.clearRect(0, 0, W, H);
+  applyCameraTransform(fgCtx);
+
+  if (scene === 'classroom') {
+    if (guideConvoComplete) drawPortalSwirl(fgCtx, portal, 195);
+    else if (!npcTalked) drawNpc(fgCtx);
+    drawBoardMessages(fgCtx);
+  } else {
+    drawPortalSwirl(fgCtx, backPortal, 210);
+    drawLaptopGlow(fgCtx);
+  }
+
+  drawPlayer(fgCtx);
+  if (scene === 'cyberland') {
+    const feetY = player.y + player.h;
+    for (const o of cyberlandOccluders) {
+      if (feetY < o.anchorY) {
+        fgCtx.drawImage(cyberImg, o.srcX, o.srcY, o.srcW, o.srcH, o.dstX, o.dstY, o.dstW, o.dstH);
+      }
+    }
+  }
+  if (showHit) drawHitboxes(fgCtx);
+
+  const feetBox = { x: player.x, y: player.y, w: player.w, h: player.h };
+
+  if (scene === 'classroom') {
+    nearBoard = rectsOverlap(feetBox, boardZone);
+    nearNpc = rectsOverlap(feetBox, npcTalkZone);
+    nearDesk = rectsOverlap(feetBox, deskZone);
+
+    if (!modalOpen && !uploadModalOpen) {
+      boardPromptEl.style.display = nearBoard ? 'block' : 'none';
+      writeBtn.style.display = nearBoard ? 'block' : 'none';
+      actionPromptEl.style.display = (nearNpc && !nearBoard && !npcTalked) ? 'block' : 'none';
+      talkBtn.style.display = (nearNpc && !nearBoard && !npcTalked) ? 'block' : 'none';
+      deskBtn.style.display = (nearDesk && interviewDownloaded) ? 'block' : 'none';
+    } else {
+      boardPromptEl.style.display = 'none';
+      writeBtn.style.display = 'none';
+      actionPromptEl.style.display = 'none';
+      talkBtn.style.display = 'none';
+      deskBtn.style.display = 'none';
+    }
+
+    if (teleportCooldown <= 0 && rectsOverlap(feetBox, portal) && guideConvoComplete) {
+      teleportTo('cyberland', backPortal.x + backPortal.w/2 - player.w/2, backPortal.y - 30);
+      advanceQuest(2);
+    }
+  } else {
+    boardPromptEl.style.display = 'none';
+    writeBtn.style.display = 'none';
+    actionPromptEl.style.display = 'none';
+    talkBtn.style.display = 'none';
+    deskBtn.style.display = 'none';
+
+    nearLaptop = rectsOverlap(feetBox, laptopZone);
+    if (!videoModalOpen && !laptopLockModalOpen && !downloadModalOpen) {
+      laptopBtn.style.display = (nearLaptop && !interviewWatched) ? 'block' : 'none';
+      downloadPromptBtn.style.display = (nearLaptop && interviewWatched && !interviewDownloaded) ? 'block' : 'none';
+    } else {
+      laptopBtn.style.display = 'none';
+      downloadPromptBtn.style.display = 'none';
+    }
+
+    if (teleportCooldown <= 0 && rectsOverlap(feetBox, backPortal)) {
+      teleportTo('classroom', portal.x - 27, portal.y + 61);
+    }
+  }
+
+  if (teleportCooldown > 0) teleportCooldown--;
+  if (speechTimer > 0) {
+    speechTimer -= 16;
+    if (speechTimer <= 0) speechBubbleEl.style.display = 'none';
+  }
+
+  document.getElementById('posLabel').textContent = `x: ${Math.round(player.x)}, y: ${Math.round(player.y)}`;
+}
+
+function loop() {
+  if (gameState === 'menu') {
+    drawMenu();
+  } else if (gameState === 'fade') {
+    drawFadeTransition();
+  } else if (gameState === 'charselect') {
+    drawCharSelect();
+  } else {
+    const held = heldDir();
+    let dx = held.dx, dy = held.dy;
+    for (const k in padState) { dx += padState[k].dx; dy += padState[k].dy; }
+    dx = Math.max(-1, Math.min(1, dx));
+    dy = Math.max(-1, Math.min(1, dy));
+    tryMove(dx, dy);
+    drawScene();
+  }
+  requestAnimationFrame(loop);
+}
+
+let gameLoopStarted = false;
+function tryStart() {
+  if (gameLoopStarted) return;
+  if (charsLoaded >= NUM_CHAR_IMAGES && roomLoaded && cyberLoaded && startupLoaded && charSelectLoaded >= NUM_CHARSELECT_IMAGES) {
+    gameLoopStarted = true;
+    gameStartTime = Date.now();
+    updateUIVisibility();
+    loop();
+  }
+}
+roomImg.onload = () => { roomLoaded = true; tryStart(); };
+cyberImg.onload = () => { cyberLoaded = true; tryStart(); };
+for (const key in charImgs) {
+  charImgs[key].onload = () => {
+    try { refreshContentBox(key); } catch (e) { charContentBox[key] = null; }
+    charsLoaded++;
+    tryStart();
+  };
+}
+</script>
+</body>
+</html>
